@@ -3,6 +3,7 @@ const cors = require('cors');
 require('dotenv').config();
 const supabase = require('./db/supabase');
 const authRoutes = require('./routes/auth');
+const positionsRoutes = require('./routes/positions');
 
 const app = express();
 
@@ -10,6 +11,7 @@ app.use(cors());
 app.use(express.json());
 
 app.use('/auth', authRoutes);
+app.use('/positions', positionsRoutes);
 app.use('/settle', require('./routes/settlement'));
 
 app.get('/health', async (req, res) => {
