@@ -26,15 +26,16 @@ function authRequired(req, res, next) {
 
 // ── POST /positions — Criar posição ──────────────────────────────────────────
 router.post("/", authRequired, async (req, res) => {
-  const { marketId, side, stake, oddLocked } = req.body;
+  const { marketId, side, oddLocked } = req.body;
+  const stake = Number(req.body.stake);
 
-  if (!marketId || !side || !stake || !oddLocked) {
+  if (!marketId || !side || !req.body.stake || !oddLocked) {
     return res.status(400).json({ error: "Campos obrigatórios: marketId, side, stake, oddLocked." });
   }
   if (!["yes", "no"].includes(side)) {
     return res.status(400).json({ error: "side deve ser 'yes' ou 'no'." });
   }
-  if (typeof stake !== "number" || stake <= 0) {
+  if (isNaN(stake) || stake <= 0) {
     return res.status(400).json({ error: "stake deve ser um número positivo." });
   }
 
@@ -90,7 +91,7 @@ router.post("/", authRequired, async (req, res) => {
   // Registra transação
   await supabase.from("transactions").insert({
     user_id:      req.userId,
-    type:         "bet_placed",
+    type:         "bet",
     amount:       -stake,
     reference_id: position.id,
   });
