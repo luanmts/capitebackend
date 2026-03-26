@@ -10,6 +10,7 @@ app.use(cors());
 app.use(express.json());
 
 app.use('/auth', authRoutes);
+app.use('/settle', require('./routes/settlement'));
 
 app.get('/health', async (req, res) => {
   const { data, error } = await supabase.from('markets').select('count');
