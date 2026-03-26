@@ -26,8 +26,13 @@ function authRequired(req, res, next) {
 
 // ── POST /positions — Criar posição ──────────────────────────────────────────
 router.post("/", authRequired, async (req, res) => {
+  console.log("[POST /positions] body recebido:", JSON.stringify(req.body));
+  console.log("[POST /positions] userId:", req.userId);
+
   const { marketId, side, oddLocked } = req.body;
   const stake = Number(req.body.stake);
+
+  console.log("[POST /positions] stake parseado:", stake, "| tipo original:", typeof req.body.stake);
 
   if (!marketId || !side || !req.body.stake || !oddLocked) {
     return res.status(400).json({ error: "Campos obrigatórios: marketId, side, stake, oddLocked." });
@@ -47,8 +52,11 @@ router.post("/", authRequired, async (req, res) => {
     .single();
 
   if (balanceErr || !balanceRow) {
+    console.error("[POST /positions] Erro ao consultar saldo:", balanceErr);
     return res.status(500).json({ error: "Erro ao consultar saldo." });
   }
+  console.log("[POST /positions] saldo disponível:", balanceRow.available_balance);
+
   if (balanceRow.available_balance < stake) {
     return res.status(402).json({ error: "Saldo insuficiente." });
   }
@@ -73,8 +81,10 @@ router.post("/", authRequired, async (req, res) => {
     .single();
 
   if (posErr) {
+    console.error("[POST /positions] Erro ao inserir posição:", posErr);
     return res.status(500).json({ error: "Erro ao criar posição." });
   }
+  console.log("[POST /positions] posição criada:", position.id);
 
   // Debita saldo
   const { error: debitErr } = await supabase
@@ -83,18 +93,23 @@ router.post("/", authRequired, async (req, res) => {
     .eq("user_id", req.userId);
 
   if (debitErr) {
+    console.error("[POST /positions] Erro ao debitar saldo:", debitErr);
     // Reverte posição se o débito falhar
     await supabase.from("positions").delete().eq("id", position.id);
     return res.status(500).json({ error: "Erro ao debitar saldo." });
   }
 
   // Registra transação
-  await supabase.from("transactions").insert({
+  const { error: txErr } = await supabase.from("transactions").insert({
     user_id:      req.userId,
     type:         "bet",
     amount:       -stake,
     reference_id: position.id,
   });
+
+  if (txErr) {
+    console.error("[POST /positions] Erro ao registrar transação:", txErr);
+  }
 
   return res.status(201).json({ position });
 });
