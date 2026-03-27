@@ -5,7 +5,7 @@ const supabase = require("../db/supabase");
 const MARKET_FIELDS = `
   id, title, slug, description, icon, image_url,
   category, closes_at, live, volume, matching_system,
-  display_type, status, current_yes_odd, current_no_odd,
+  display_type, status, current_yes_odd, current_no_odd, start_price, current_round_id,
   virtual_yes_base, virtual_no_base, real_yes_volume, real_no_volume,
   selections:market_selections ( id, label, odd, odd_nao, percent, code, color )
 `.trim();
@@ -20,7 +20,8 @@ router.get("/", async (req, res) => {
     return res.status(500).json({ error: "Erro ao listar mercados." });
   }
 
-  return res.json({ markets });
+  const filtered = (markets || []).filter(m => !/-\d{13}$/.test(m.id));
+  return res.json({ markets: filtered });
 });
 
 router.get("/slug/:slug", async (req, res) => {
