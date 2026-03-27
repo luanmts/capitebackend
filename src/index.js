@@ -4,6 +4,7 @@ require('dotenv').config();
 const supabase = require('./db/supabase');
 const authRoutes = require('./routes/auth');
 const positionsRoutes = require('./routes/positions');
+const { startRecurringMarketsCron } = require('./jobs/recurringMarketsCron');
 
 const app = express();
 
@@ -28,3 +29,4 @@ const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
   console.log(`Capite API rodando na porta ${PORT}`);
 });
+startRecurringMarketsCron();
