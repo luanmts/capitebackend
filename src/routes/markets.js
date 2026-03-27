@@ -10,7 +10,6 @@ const MARKET_FIELDS = `
   selections:market_selections ( id, label, odd, odd_nao, percent, code, color )
 `.trim();
 
-// ── GET /markets — Lista mercados abertos ─────────────────────────────────────
 router.get("/", async (req, res) => {
   const { data: markets, error } = await supabase
     .from("markets")
@@ -24,7 +23,6 @@ router.get("/", async (req, res) => {
   return res.json({ markets });
 });
 
-// ── GET /markets/slug/:slug — Busca por slug ──────────────────────────────────
 router.get("/slug/:slug", async (req, res) => {
   const { data: market, error } = await supabase
     .from("markets")
@@ -39,7 +37,6 @@ router.get("/slug/:slug", async (req, res) => {
   return res.json({ market });
 });
 
-// ── GET /markets/:id — Busca por ID ──────────────────────────────────────────
 router.get("/:id", async (req, res) => {
   const { data: market, error } = await supabase
     .from("markets")
