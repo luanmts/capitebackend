@@ -13,6 +13,7 @@ app.use(express.json());
 app.use('/auth', authRoutes);
 app.use('/positions', positionsRoutes);
 app.use('/settle', require('./routes/settlement'));
+app.use('/markets', require('./routes/markets'));
 
 app.get('/health', async (req, res) => {
   const { data, error } = await supabase.from('markets').select('count');
