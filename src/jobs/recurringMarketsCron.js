@@ -65,6 +65,26 @@ const RECURRING_MARKETS = [
     noColor:      "#e23838",
   },
 
+  {
+    templateId:   "sol-5min-template",
+    slug:         "sol-5min",
+    title:        "Solana: Sobe ou Desce? (em 5 minutos)",
+    description:  "O preço da Solana (SOL/USD) vai subir ou cair nos próximos 5 minutos na Binance.",
+    icon:         "◎",
+    category:     "Criptomoedas",
+    displayType:  "crypto-live",
+    intervalMins: 5,
+    active24h:    true,
+    activeHours:  null,
+    fetchPrice:   fetchSolPrice,
+    yesLabel:     "Sobe",
+    noLabel:      "Desce",
+    yesCode:      "SOBE",
+    noCode:       "DESCE",
+    yesColor:     "#02BC17",
+    noColor:      "#e23838",
+  },
+
   // ── Adicione Rodovia aqui quando tiver a fonte de contagem ───────────────
   // {
   //   templateId:   "rodovia-5min-template",
@@ -122,6 +142,22 @@ async function fetchEthPrice() {
     }
   } catch (err) {
     console.warn("[recurringCron] Binance ETH falhou:", err.message);
+  }
+  return null;
+}
+
+async function fetchSolPrice() {
+  try {
+    const res = await fetch("https://api.binance.com/api/v3/ticker/price?symbol=SOLUSDT", {
+      timeout: 5000,
+    });
+    if (res.ok) {
+      const data = await res.json();
+      const price = parseFloat(data.price);
+      if (!isNaN(price) && price > 0) return price;
+    }
+  } catch (err) {
+    console.warn("[recurringCron] Binance SOL falhou:", err.message);
   }
   return null;
 }
