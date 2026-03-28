@@ -46,6 +46,13 @@ function authRequired(req, res, next) {
 
 // ── POST /positions — Criar posição ──────────────────────────────────────────
 router.post("/", authRequired, async (req, res) => {
+  console.log("[POST /positions] body:", {
+    userId:   req.userId,
+    marketId: req.body.marketId,
+    side:     req.body.side,
+    stake:    req.body.stake,
+  });
+
   const { marketId, side } = req.body;
   const stake = Number(req.body.stake);
 
@@ -63,11 +70,22 @@ router.post("/", authRequired, async (req, res) => {
   const { data: market, error: marketErr } = await supabase
     .from("markets")
     .select(
-      "id, status, closes_at, current_yes_odd, current_no_odd, " +
+      "id, slug, status, closes_at, current_round_id, current_yes_odd, current_no_odd, " +
       "virtual_yes_base, virtual_no_base, real_yes_volume, real_no_volume, volume"
     )
     .eq("id", marketId)
     .single();
+
+  console.log("[POST /positions] market encontrado:", {
+    id:               market?.id,
+    slug:             market?.slug,
+    current_round_id: market?.current_round_id,
+    current_yes_odd:  market?.current_yes_odd,
+    current_no_odd:   market?.current_no_odd,
+    status:           market?.status,
+    closes_at:        market?.closes_at,
+    marketErr:        marketErr?.message ?? null,
+  });
 
   if (marketErr || !market) {
     return res.status(404).json({ error: "Mercado não encontrado." });
