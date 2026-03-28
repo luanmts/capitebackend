@@ -16,6 +16,7 @@ app.use('/positions', positionsRoutes);
 app.use('/settle', require('./routes/settlement'));
 app.use('/markets', require('./routes/markets'));
 app.use('/wallet', require('./routes/wallet'));
+app.use('/prices', require('./routes/prices'));
 
 app.get('/health', async (req, res) => {
   const { data, error } = await supabase.from('markets').select('count');

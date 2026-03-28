@@ -37,14 +37,25 @@ const RECURRING_MARKETS = [
     noColor:      "#e23838",
   },
 
-  // ── Adicione Petróleo aqui quando tiver a fonte de preço ──────────────────
-  // {
-  //   templateId:   "petroleo-5min-template",
-  //   slug:         "petroleo-5min",
-  //   title:        "Petróleo: Sobe ou Desce? (em 5 minutos)",
-  //   ...
-  //   fetchPrice:   fetchPetroleumPrice,
-  // },
+  {
+    templateId:   "petroleo-5min-template",
+    slug:         "petroleo-5min",
+    title:        "Petróleo: Sobe ou Desce? (em 5 minutos)",
+    description:  "O preço do Petróleo WTI (CL=F) vai subir ou cair nos próximos 5 minutos.",
+    icon:         "🛢️",
+    category:     "Commodities",
+    displayType:  "crypto-live",
+    intervalMins: 5,
+    active24h:    false,
+    activeHours:  { start: 9, end: 24 },
+    fetchPrice:   fetchPetroleumPrice,
+    yesLabel:     "Sobe",
+    noLabel:      "Desce",
+    yesCode:      "SOBE",
+    noCode:       "DESCE",
+    yesColor:     "#02BC17",
+    noColor:      "#e23838",
+  },
 
   // ── Adicione Rodovia aqui quando tiver a fonte de contagem ───────────────
   // {
@@ -91,8 +102,23 @@ async function fetchBitcoinPrice() {
   return null; // ambas as fontes falharam
 }
 
-// Placeholder para Petróleo — implementar quando tiver a fonte
-// async function fetchPetroleumPrice() { ... }
+async function fetchPetroleumPrice() {
+  try {
+    // WTI Crude Oil futures (CL=F) via Yahoo Finance
+    const res = await fetch(
+      "https://query1.finance.yahoo.com/v8/finance/chart/CL=F?interval=1m&range=1m",
+      { timeout: 5000, headers: { "User-Agent": "Mozilla/5.0" } }
+    );
+    if (res.ok) {
+      const data = await res.json();
+      const price = data?.chart?.result?.[0]?.meta?.regularMarketPrice;
+      if (price && !isNaN(price)) return parseFloat(price);
+    }
+  } catch (err) {
+    console.warn("[recurringCron] Yahoo Finance (petróleo) falhou:", err.message);
+  }
+  return null;
+}
 
 // Placeholder para Rodovia — implementar quando tiver a fonte
 // async function fetchRodoviaCount() { ... }
