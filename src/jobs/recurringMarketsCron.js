@@ -37,18 +37,26 @@ const RECURRING_MARKETS = [
     noColor:      "#e23838",
   },
 
+  // Petróleo temporariamente desativado — oculto da vitrine
+  // {
+  //   templateId:   "petroleo-5min-template",
+  //   slug:         "petroleo-5min",
+  //   ...
+  //   fetchPrice:   fetchPetroleumPrice,
+  // },
+
   {
-    templateId:   "petroleo-5min-template",
-    slug:         "petroleo-5min",
-    title:        "Petróleo: Sobe ou Desce? (em 5 minutos)",
-    description:  "O preço do Petróleo WTI (CL=F) vai subir ou cair nos próximos 5 minutos.",
-    icon:         "🛢️",
-    category:     "Commodities",
+    templateId:   "eth-5min-template",
+    slug:         "eth-5min",
+    title:        "Ethereum: Sobe ou Desce? (em 5 minutos)",
+    description:  "O preço do Ethereum (ETH/USD) vai subir ou cair nos próximos 5 minutos na Binance.",
+    icon:         "⟠",
+    category:     "Criptomoedas",
     displayType:  "crypto-live",
     intervalMins: 5,
     active24h:    true,
     activeHours:  null,
-    fetchPrice:   fetchPetroleumPrice,
+    fetchPrice:   fetchEthPrice,
     yesLabel:     "Sobe",
     noLabel:      "Desce",
     yesCode:      "SOBE",
@@ -100,6 +108,22 @@ async function fetchBitcoinPrice() {
   }
 
   return null; // ambas as fontes falharam
+}
+
+async function fetchEthPrice() {
+  try {
+    const res = await fetch("https://api.binance.com/api/v3/ticker/price?symbol=ETHUSDT", {
+      timeout: 5000,
+    });
+    if (res.ok) {
+      const data = await res.json();
+      const price = parseFloat(data.price);
+      if (!isNaN(price) && price > 0) return price;
+    }
+  } catch (err) {
+    console.warn("[recurringCron] Binance ETH falhou:", err.message);
+  }
+  return null;
 }
 
 async function fetchPetroleumPrice() {

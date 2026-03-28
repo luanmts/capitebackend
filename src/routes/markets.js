@@ -10,6 +10,9 @@ const MARKET_FIELDS = `
   selections:market_selections ( id, label, odd, odd_nao, percent, code, color )
 `.trim();
 
+// Templates ocultos temporariamente da vitrine (código e DB intactos)
+const HIDDEN_TEMPLATES = new Set(["petroleo-5min-template"]);
+
 router.get("/", async (req, res) => {
   const { data: markets, error } = await supabase
     .from("markets")
@@ -20,7 +23,9 @@ router.get("/", async (req, res) => {
     return res.status(500).json({ error: "Erro ao listar mercados." });
   }
 
-  const filtered = (markets || []).filter(m => !/-\d{13}$/.test(m.id));
+  const filtered = (markets || []).filter(
+    m => !/-\d{13}$/.test(m.id) && !HIDDEN_TEMPLATES.has(m.id)
+  );
   return res.json({ markets: filtered });
 });
 
