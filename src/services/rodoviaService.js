@@ -16,6 +16,11 @@ async function getThreshold() {
   return data?.threshold || 145;
 }
 
+// Retorna odds iniciais padrão para alinhamento com outros mercados live
+function getInitialOdds() {
+  return 1.92;
+}
+
 function nowIso() {
   return new Date().toISOString();
 }
@@ -149,4 +154,5 @@ module.exports = {
   updateRoundMetrics,
   getCurrentCount,
   getThreshold,
+  getInitialOdds,
 };

@@ -302,6 +302,13 @@ async function processMarket(market) {
     console.log(`[recurringCron] ${templateId} — round ${newRoundId} já existe, pulando criação.`);
   } else {
     // 4. Cria o novo round
+    // Para Rodovia, usar função de odds do serviço específico
+    let initialOdds = 1.92;
+    if (templateId === "rodovia-5min-template") {
+      const rodoviaService = require("../services/rodoviaService");
+      initialOdds = rodoviaService.getInitialOdds();
+    }
+    
     const { error: insertErr } = await supabase.from("markets").insert({
       id:               newRoundId,
       title,
@@ -318,8 +325,8 @@ async function processMarket(market) {
       virtual_no_base:  1000,
       real_yes_volume:  0,
       real_no_volume:   0,
-      current_yes_odd:  1.92,
-      current_no_odd:   1.92,
+      current_yes_odd:  initialOdds,
+      current_no_odd:   initialOdds,
       start_price:      currentPrice,
       closes_at:        slotEnd.toISOString(),
       created_at:       now.toISOString(),
@@ -338,7 +345,7 @@ async function processMarket(market) {
         id:        `${newRoundId}-yes`,
         market_id: newRoundId,
         label:     yesLabel,
-        odd:       1.92,
+        odd:       initialOdds,
         percent:   50,
         code:      yesCode,
         color:     yesColor,
@@ -347,7 +354,7 @@ async function processMarket(market) {
         id:        `${newRoundId}-no`,
         market_id: newRoundId,
         label:     noLabel,
-        odd:       1.92,
+        odd:       initialOdds,
         percent:   50,
         code:      noCode,
         color:     noColor,
