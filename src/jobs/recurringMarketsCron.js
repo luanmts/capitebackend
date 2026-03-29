@@ -85,14 +85,25 @@ const RECURRING_MARKETS = [
     noColor:      "#e23838",
   },
 
-  // ── Adicione Rodovia aqui quando tiver a fonte de contagem ───────────────
-  // {
-  //   templateId:   "rodovia-5min-template",
-  //   slug:         "rodovia-castelo-branco-5min",
-  //   title:        "Rodovia: Quantos Carros? (em 5 minutos)",
-  //   ...
-  //   fetchPrice:   fetchRodoviaCount,
-  // },
+  {
+    templateId:   "rodovia-5min-template",
+    slug:         "rodovia-castelo-branco-5min",
+    title:        "Rodovia: Quantos Carros? (em 5 minutos)",
+    description:  "Monitoramento ao vivo da Rodovia Arão Sahm, KM 95 — Bragança Paulista (SP). Quantos carros serão contados pela IA nos próximos 5 minutos?",
+    icon:         "🚗",
+    category:     "Entretenimento",
+    displayType:  "live-count",
+    intervalMins: 5,
+    active24h:    true,
+    activeHours:  null,
+    fetchPrice:   fetchRodoviaCount,
+    yesLabel:     "Mais de {threshold}",
+    noLabel:      "Até {threshold}",
+    yesCode:      "MAIS",
+    noCode:       "ATE",
+    yesColor:     "#02BC17",
+    noColor:      "#e23838",
+  },
 ];
 
 // ── Funções de busca de preço ─────────────────────────────────────────────────
@@ -180,8 +191,16 @@ async function fetchPetroleumPrice() {
   return null;
 }
 
-// Placeholder para Rodovia — implementar quando tiver a fonte
-// async function fetchRodoviaCount() { ... }
+// Função para buscar contagem atual da Rodovia
+async function fetchRodoviaCount() {
+  try {
+    const rodoviaService = require("../services/rodoviaService");
+    return await rodoviaService.getCurrentCount();
+  } catch (err) {
+    console.warn("[recurringCron] Erro ao obter contagem da Rodovia:", err.message);
+    return 0; // Valor default para permitir criação de rounds
+  }
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -235,11 +254,22 @@ async function processMarket(market) {
 
   // 1. Busca preço atual
   const currentPrice = await fetchPrice();
-  if (!currentPrice) {
+  if (!currentPrice && templateId !== "rodovia-5min-template") {
     console.error(`[recurringCron] ${templateId} — não foi possível obter preço. Round não criado.`);
     return;
   }
   console.log(`[recurringCron] ${templateId} — preço atual: ${currentPrice}`);
+  
+  // Tratamento especial para Rodovia: busca threshold dinâmico
+  let threshold = 145; // Default
+  if (templateId === "rodovia-5min-template") {
+    const rodoviaService = require("../services/rodoviaService");
+    threshold = await rodoviaService.getThreshold();
+    
+    // Substituir placeholders nos labels
+    market.yesLabel = market.yesLabel.replace("{threshold}", threshold);
+    market.noLabel = market.noLabel.replace("{threshold}", threshold);
+  }
 
   const now          = new Date();
   const slotStart    = getCurrentSlotStart(intervalMins);
@@ -328,6 +358,27 @@ async function processMarket(market) {
     if (selErr) {
       console.error(`[recurringCron] ${templateId} — erro ao inserir selections:`, selErr.message);
     }
+    
+    // Cria registro auxiliar em market_rounds para Rodovia
+    if (templateId === "rodovia-5min-template") {
+      const { error: auxErr } = await supabase.from("market_rounds").insert({
+        id: newRoundId,
+        template_slug: slug,
+        starts_at: slotStart.toISOString(),
+        bets_close_at: new Date(slotStart.getTime() + 150 * 1000).toISOString(),
+        ends_at: slotEnd.toISOString(),
+        status: "live",
+        threshold: threshold,
+        current_count: 0,
+        source_health: "ok",
+        created_at: now.toISOString(),
+        updated_at: now.toISOString(),
+      });
+
+      if (auxErr) {
+        console.error(`[recurringCron] ${templateId} — erro ao criar registro auxiliar:`, auxErr.message);
+      }
+    }
 
     // 5. Atualiza o template para apontar pro novo round
     const { error: templateUpdateErr } = await supabase
@@ -378,11 +429,41 @@ async function settleRound(roundId, closePrice) {
 
   // Determina outcome
   let outcome;
-  if (closePrice > startPrice)       outcome = "yes";       // Sobe
-  else if (closePrice < startPrice)  outcome = "no";        // Desce
-  else                               outcome = "cancelled";  // Empate — reembolso
-
-  console.log(`[recurringCron] Round ${roundId} — startPrice: ${startPrice}, closePrice: ${closePrice}, outcome: ${outcome}`);
+  
+  if (roundId.startsWith("rodovia-5min-template")) {
+    // Para Rodovia, buscar contagem final e threshold
+    const { data: auxData } = await supabase
+      .from("market_rounds")
+      .select("current_count, threshold")
+      .eq("id", roundId)
+      .single();
+      
+    const finalCount = auxData?.current_count || 0;
+    const threshold = auxData?.threshold || 145;
+    
+    // Determinar outcome baseado na contagem vs threshold
+    outcome = finalCount > threshold ? "yes" : "no";
+    
+    // Atualizar dados auxiliares
+    await supabase
+      .from("market_rounds")
+      .update({
+        status: "settled",
+        final_count: finalCount,
+        result: outcome,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", roundId);
+      
+    console.log(`[recurringCron] Rodovia round ${roundId} — finalCount: ${finalCount}, threshold: ${threshold}, outcome: ${outcome}`);
+  } else {
+    // Lógica original para crypto
+    if (closePrice > startPrice)       outcome = "yes";
+    else if (closePrice < startPrice)  outcome = "no";
+    else                               outcome = "cancelled";
+    
+    console.log(`[recurringCron] Round ${roundId} — startPrice: ${startPrice}, closePrice: ${closePrice}, outcome: ${outcome}`);
+  }
 
   // Atualiza status do round no banco
   const { error: marketUpdateErr } = await supabase

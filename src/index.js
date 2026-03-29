@@ -17,6 +17,8 @@ app.use('/settle', require('./routes/settlement'));
 app.use('/markets', require('./routes/markets'));
 app.use('/wallet', require('./routes/wallet'));
 app.use('/prices', require('./routes/prices'));
+app.use('/api/rodovia', require('./routes/rodovia'));
+app.use('/internal/rodovia', require('./routes/rodovia'));
 
 app.get('/health', async (req, res) => {
   const { data, error } = await supabase.from('markets').select('count');
