@@ -243,7 +243,7 @@ function isActiveNow(market) {
 async function processMarket(market) {
   const {
     templateId, slug, title, description, icon, category, displayType,
-    intervalMins, yesLabel, noLabel, yesCode, noCode, yesColor, noColor,
+    intervalMins, yesCode, noCode, yesColor, noColor,
     fetchPrice,
   } = market;
 
@@ -344,7 +344,7 @@ async function processMarket(market) {
       {
         id:        `${newRoundId}-yes`,
         market_id: newRoundId,
-        label:     yesLabel,
+        label:     market.yesLabel,
         odd:       initialOdds,
         percent:   50,
         code:      yesCode,
@@ -353,7 +353,7 @@ async function processMarket(market) {
       {
         id:        `${newRoundId}-no`,
         market_id: newRoundId,
-        label:     noLabel,
+        label:     market.noLabel,
         odd:       initialOdds,
         percent:   50,
         code:      noCode,
