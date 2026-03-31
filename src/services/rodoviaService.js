@@ -120,14 +120,14 @@ async function updateRoundMetrics(roundId, metrics) {
     .eq("id", roundId)
     .single();
 
-  if (roundErr) {
-    console.error("[rodoviaService] Round não encontrado:", roundErr.message);
-    return false;
+  if (roundErr || !round) {
+    console.error("[rodoviaService] Round não encontrado:", roundErr?.message);
+    return { ok: false, reason: "not_found" };
   }
 
   if (round.status !== "open") {
     console.error(`[rodoviaService] Round ${roundId} não está aberto (status: ${round.status})`);
-    return false;
+    return { ok: false, reason: "not_open" };
   }
 
   // 2. Atualiza dados auxiliares
@@ -142,10 +142,49 @@ async function updateRoundMetrics(roundId, metrics) {
 
   if (updateErr) {
     console.error("[rodoviaService] Erro ao atualizar métricas:", updateErr.message);
-    return false;
+    return { ok: false, reason: "db_error" };
   }
 
-  return true;
+  return { ok: true };
+}
+
+async function finalizeRound(roundId, finalCount) {
+  // 1. Verifica se o round existe e está aberto
+  const { data: round, error: roundErr } = await supabase
+    .from("markets")
+    .select("status")
+    .eq("id", roundId)
+    .single();
+
+  if (roundErr || !round) {
+    console.error("[rodoviaService] finalizeRound — round não encontrado:", roundErr?.message);
+    return { ok: false, reason: "not_found" };
+  }
+
+  if (round.status !== "open") {
+    console.error(`[rodoviaService] finalizeRound — round ${roundId} não está aberto (status: ${round.status})`);
+    return { ok: false, reason: "not_open" };
+  }
+
+  // 2. Grava contagem final em market_rounds — o cron usará current_count na liquidação
+  const { error: updateErr } = await supabase
+    .from("market_rounds")
+    .update({
+      current_count: finalCount,
+      final_count:   finalCount,
+      source_health: "final",
+      status:        "ended",
+      updated_at:    nowIso(),
+    })
+    .eq("id", roundId);
+
+  if (updateErr) {
+    console.error("[rodoviaService] finalizeRound — erro ao gravar contagem final:", updateErr.message);
+    return { ok: false, reason: "db_error" };
+  }
+
+  console.log(`[rodoviaService] Round ${roundId} finalizado com contagem ${finalCount}`);
+  return { ok: true };
 }
 
 // Função para obter contagem atual (placeholder)
@@ -161,6 +200,7 @@ module.exports = {
   BET_WINDOW_SEC,
   getActiveRound,
   updateRoundMetrics,
+  finalizeRound,
   getCurrentCount,
   getThreshold,
   getInitialOdds,
