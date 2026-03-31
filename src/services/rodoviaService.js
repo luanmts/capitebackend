@@ -18,7 +18,7 @@ async function getThreshold() {
 
 // Retorna odds iniciais padrão para alinhamento com outros mercados live
 function getInitialOdds() {
-  return 1.92;
+  return 1.76;
 }
 
 function nowIso() {
