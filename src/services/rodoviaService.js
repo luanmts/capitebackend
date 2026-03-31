@@ -81,7 +81,7 @@ async function getActiveRound() {
   // 3. Busca dados auxiliares em market_rounds
   const { data: auxData, error: auxErr } = await supabase
     .from("market_rounds")
-    .select("current_count, threshold, status as operational_status, source_health")
+    .select("current_count, threshold, operational_status:status, source_health")
     .eq("id", currentRoundId)
     .maybeSingle();
 
