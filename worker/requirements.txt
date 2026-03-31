@@ -1,6 +1,9 @@
+# HTTP + env
 requests>=2.31.0
 python-dotenv>=1.0.0
-# Próxima etapa — YOLO + rastreamento:
-# ultralytics>=8.0.0
-# supervision>=0.18.0
-# opencv-python>=4.9.0
+
+# Visão computacional
+ultralytics>=8.2.0      # YOLO v8/v11 + ByteTrack integrado
+supervision>=0.22.0     # LineZone, ByteTrack wrapper, Detections
+opencv-python>=4.9.0    # captura RTSP e leitura de frames
+numpy>=1.24.0
