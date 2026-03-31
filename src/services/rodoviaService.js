@@ -38,16 +38,25 @@ function deriveOperationalStatus(round) {
 }
 
 async function getActiveRound() {
-  // 1. Busca template para obter current_round_id
+  // 1. Busca template para obter current_round_id (e corrige odds nulas se necessário)
   const { data: template, error: templateErr } = await supabase
     .from("markets")
-    .select("current_round_id")
+    .select("current_round_id, current_yes_odd, current_no_odd")
     .eq("id", RODOVIA_TEMPLATE_ID)
     .single();
 
   if (templateErr) {
     console.error("[rodoviaService] Erro ao buscar template:", templateErr.message);
     return null;
+  }
+
+  // Garante que o template sempre exibe as odds iniciais corretas
+  if (!template?.current_yes_odd || !template?.current_no_odd) {
+    const initialOdds = getInitialOdds();
+    await supabase
+      .from("markets")
+      .update({ current_yes_odd: initialOdds, current_no_odd: initialOdds })
+      .eq("id", RODOVIA_TEMPLATE_ID);
   }
 
   const currentRoundId = template?.current_round_id;

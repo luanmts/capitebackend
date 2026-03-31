@@ -395,6 +395,8 @@ async function processMarket(market) {
         start_price:      currentPrice,
         closes_at:        slotEnd.toISOString(),
         status:           "open",
+        current_yes_odd:  initialOdds,
+        current_no_odd:   initialOdds,
         updated_at:       now.toISOString(),
       })
       .eq("id", templateId);
