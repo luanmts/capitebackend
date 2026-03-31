@@ -1,0 +1,6 @@
+requests>=2.31.0
+python-dotenv>=1.0.0
+# Próxima etapa — YOLO + rastreamento:
+# ultralytics>=8.0.0
+# supervision>=0.18.0
+# opencv-python>=4.9.0
