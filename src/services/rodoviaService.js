@@ -130,19 +130,26 @@ async function updateRoundMetrics(roundId, metrics) {
     return { ok: false, reason: "not_open" };
   }
 
-  // 2. Atualiza dados auxiliares
-  const { error: updateErr } = await supabase
+  // 2. Atualiza dados auxiliares — .select() garante que detectamos 0 linhas afetadas
+  //    (Supabase .update() sem .select() retorna null em vez de [] quando 0 rows matched)
+  const { data: updated, error: updateErr } = await supabase
     .from("market_rounds")
     .update({
       current_count: metrics.currentCount,
       source_health: metrics.sourceHealth || "ok",
       updated_at: nowIso(),
     })
-    .eq("id", roundId);
+    .eq("id", roundId)
+    .select("id");
 
   if (updateErr) {
     console.error("[rodoviaService] Erro ao atualizar métricas:", updateErr.message);
     return { ok: false, reason: "db_error" };
+  }
+
+  if (!updated || updated.length === 0) {
+    console.error(`[rodoviaService] market_rounds row ausente para round ${roundId} — UPDATE afetou 0 linhas.`);
+    return { ok: false, reason: "not_found" };
   }
 
   return { ok: true };
