@@ -6,7 +6,7 @@ Fluxo por round (5 min):
   1. Busca round ativo via GET /rodovia/rounds/active
   2. VehicleCounter roda em thread de fundo contando cruzamentos
   3. A cada METRICS_INTERVAL_SEC: envia contagem acumulada (POST metrics)
-  4. FINALIZE_BEFORE_SEC antes do endsAt: envia contagem final (POST finalize)
+  4. Ao atingir endsAt: drena cruzamentos pendentes e envia finalize
   5. Aguarda próximo round
 
 Configuração completa via .env — veja .env.example
@@ -30,7 +30,6 @@ API_BASE_URL       = os.getenv("API_BASE_URL", "http://localhost:3001")
 WORKER_KEY         = os.getenv("RODOVIA_WORKER_KEY", "")
 METRICS_INTERVAL   = int(os.getenv("METRICS_INTERVAL_SEC", "10"))
 POLL_INTERVAL      = int(os.getenv("POLL_INTERVAL_SEC", "5"))
-FINALIZE_BEFORE    = int(os.getenv("FINALIZE_BEFORE_SEC", "20"))
 
 # Visão computacional
 RTSP_URL           = os.getenv("RTSP_URL", "")
@@ -309,27 +308,25 @@ def run_round(round_data: dict, counter: VehicleCounter) -> None:
 
     total_count    = 0
     last_send_time = time.monotonic()
-    finalized      = False
 
     while True:
         now_utc   = datetime.now(timezone.utc)
         remaining = (ends_at - now_utc).total_seconds()
 
-        # Envia finalize FINALIZE_BEFORE s antes do endsAt (evita race com cron)
-        if not finalized and remaining <= FINALIZE_BEFORE:
-            log.info("⏹ Finalizando (%.0fs antes do fim) — count=%d", remaining, total_count)
-            send_finalize(round_id, total_count)
-            finalized = True
-
-        if remaining <= 0:
-            break
-
-        # Envia métricas a cada METRICS_INTERVAL segundos
+        # Envia última métrica pendente antes de finalizar
         if time.monotonic() - last_send_time >= METRICS_INTERVAL:
             incremental, diag = counter.get_incremental()
             total_count += incremental
             send_metrics(round_id, total_count, diag)
             last_send_time = time.monotonic()
+
+        # Finaliza ao atingir endsAt real — sai do loop imediatamente
+        if remaining <= 0:
+            incremental, diag = counter.get_incremental()
+            total_count += incremental
+            log.info("⏹ Round encerrado — enviando finalize count=%d", total_count)
+            send_finalize(round_id, total_count)
+            break
 
         time.sleep(1)
 
