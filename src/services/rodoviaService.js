@@ -149,10 +149,12 @@ async function updateRoundMetrics(roundId, metrics) {
 }
 
 async function finalizeRound(roundId, finalCount) {
-  // 1. Verifica se o round existe e está aberto
+  // Não bloqueia por status — o cron pode já ter resolvido o round nessa janela de tempo.
+  // O importante é gravar final_count em market_rounds para auditoria e para o cron usar
+  // em caso de race condition onde finalize chega antes da liquidação.
   const { data: round, error: roundErr } = await supabase
     .from("markets")
-    .select("status")
+    .select("id")
     .eq("id", roundId)
     .single();
 
@@ -161,12 +163,7 @@ async function finalizeRound(roundId, finalCount) {
     return { ok: false, reason: "not_found" };
   }
 
-  if (round.status !== "open") {
-    console.error(`[rodoviaService] finalizeRound — round ${roundId} não está aberto (status: ${round.status})`);
-    return { ok: false, reason: "not_open" };
-  }
-
-  // 2. Grava contagem final em market_rounds — o cron usará current_count na liquidação
+  // Grava contagem final em market_rounds — o cron usará current_count na liquidação
   const { error: updateErr } = await supabase
     .from("market_rounds")
     .update({

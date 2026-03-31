@@ -31,6 +31,7 @@ API_BASE_URL       = os.getenv("API_BASE_URL", "http://localhost:3001")
 WORKER_KEY         = os.getenv("RODOVIA_WORKER_KEY", "")
 METRICS_INTERVAL   = int(os.getenv("METRICS_INTERVAL_SEC", "10"))   # segundos entre updates
 POLL_INTERVAL      = int(os.getenv("POLL_INTERVAL_SEC", "5"))       # segundos ao aguardar round
+FINALIZE_BEFORE    = int(os.getenv("FINALIZE_BEFORE_SEC", "20"))    # envia finalize N segundos antes do endsAt
 LOG_LEVEL          = os.getenv("LOG_LEVEL", "INFO")
 
 logging.basicConfig(
@@ -156,14 +157,24 @@ def run_round(round_data: dict) -> None:
     total_count    = 0
     last_send_time = time.monotonic()
 
+    finalized = False
+
     while True:
         now_utc    = datetime.now(timezone.utc)
         remaining  = (ends_at - now_utc).total_seconds()
 
-        if remaining <= 0:
-            # Round encerrado — envia contagem final
-            log.info("⏹ Round encerrado, enviando finalize — count=%d", total_count)
+        # Envia finalize FINALIZE_BEFORE segundos antes do endsAt para chegar
+        # antes do cron resolver o round (race condition na virada do slot).
+        if not finalized and remaining <= FINALIZE_BEFORE:
+            log.info(
+                "⏹ Finalizando round — %.0fs antes do fim — count=%d",
+                remaining, total_count,
+            )
             send_finalize(round_id, total_count)
+            finalized = True
+
+        # Sai do loop apenas quando o round realmente terminou
+        if remaining <= 0:
             break
 
         elapsed = time.monotonic() - last_send_time
