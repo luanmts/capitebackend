@@ -47,6 +47,12 @@ LINE_END           = tuple(float(x) for x in os.getenv("LINE_END",   "1.0,0.5").
 
 LOG_LEVEL          = os.getenv("LOG_LEVEL", "INFO")
 
+# Debug visual — salva frames anotados em disco para calibração
+# DEBUG_OUTPUT_DIR=""  → desativado (padrão)
+# DEBUG_OUTPUT_DIR="/tmp/rodovia_debug"  → salva 1 frame a cada DEBUG_SAVE_EVERY frames
+DEBUG_OUTPUT_DIR   = os.getenv("DEBUG_OUTPUT_DIR", "")
+DEBUG_SAVE_EVERY   = int(os.getenv("DEBUG_SAVE_EVERY", "30"))   # 1 frame a cada N frames processados
+
 logging.basicConfig(
     level=getattr(logging, LOG_LEVEL),
     format="%(asctime)s [worker] %(levelname)s %(message)s",
@@ -98,6 +104,23 @@ class VehicleCounter:
                 f"Dependências de visão não instaladas: {exc}\n"
                 "Execute: pip install ultralytics supervision opencv-python"
             ) from exc
+
+        # Anotadores do debug visual (instanciados uma vez, reutilizados por frame)
+        if DEBUG_OUTPUT_DIR:
+            import os as _os
+            _os.makedirs(DEBUG_OUTPUT_DIR, exist_ok=True)
+            self._box_ann   = sv.BoxAnnotator(thickness=2)
+            self._label_ann = sv.LabelAnnotator(text_scale=0.5, text_thickness=1)
+            self._line_ann  = sv.LineZoneAnnotator(thickness=2, text_thickness=1, text_scale=0.5)
+            log.info("Debug visual ATIVO — frames salvos em %s a cada %d frames", DEBUG_OUTPUT_DIR, DEBUG_SAVE_EVERY)
+        else:
+            self._box_ann   = None
+            self._label_ann = None
+            self._line_ann  = None
+
+        self._debug_frame_n = 0   # contador de frames processados para o debug
+        # IDs que cruzaram neste frame — destacados em amarelo por 1 frame salvo
+        self._just_crossed: set = set()
 
         # Mapeia nomes de classe → IDs do modelo
         class_filter = {c.strip() for c in VEHICLE_CLASSES.split(",")}
@@ -230,7 +253,51 @@ class VehicleCounter:
                 if new > 0:
                     with self._lock:
                         self._total_crossings += new
+                    # Registra IDs que cruzaram para destaque visual
+                    if self._box_ann is not None and detections.tracker_id is not None:
+                        self._just_crossed = {
+                            int(tid)
+                            for tid, hit in zip(detections.tracker_id, crossed_in)
+                            if hit
+                        }
                     log.debug("+%d cruzamento(s) — acumulado=%d", new, self._total_crossings)
+                else:
+                    self._just_crossed = set()
+
+                # ── Debug visual ──
+                if self._box_ann is not None:
+                    self._debug_frame_n += 1
+                    if self._debug_frame_n % DEBUG_SAVE_EVERY == 0:
+                        annotated = frame.copy()
+
+                        # Cores: verde para rastreados, amarelo para quem acabou de cruzar
+                        colors = []
+                        labels = []
+                        for i, tid in enumerate(detections.tracker_id or []):
+                            crossed = int(tid) in self._just_crossed
+                            colors.append((0, 255, 255) if crossed else (0, 255, 0))  # BGR
+                            conf = float(detections.confidence[i]) if detections.confidence is not None else 0.0
+                            labels.append(f"#{tid} {'✓' if crossed else ''} {conf:.2f}")
+
+                        # Bounding boxes com cor por status
+                        for i, (xyxy, color) in enumerate(zip(detections.xyxy, colors)):
+                            x1, y1, x2, y2 = map(int, xyxy)
+                            cv2.rectangle(annotated, (x1, y1), (x2, y2), color, 2)
+                            cv2.putText(annotated, labels[i], (x1, y1 - 6),
+                                        cv2.FONT_HERSHEY_SIMPLEX, 0.45, color, 1, cv2.LINE_AA)
+
+                        # Linha virtual
+                        self._line_ann.annotate(frame=annotated, line_counter=line_zone)
+
+                        # Contador total no canto
+                        with self._lock:
+                            count_now = self._total_crossings
+                        cv2.putText(annotated, f"count={count_now}", (10, 30),
+                                    cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255, 255, 255), 2, cv2.LINE_AA)
+
+                        ts = datetime.now().strftime("%H%M%S_%f")[:9]
+                        out_path = f"{DEBUG_OUTPUT_DIR}/frame_{ts}.jpg"
+                        cv2.imwrite(out_path, annotated)
 
             cap.release()
 
