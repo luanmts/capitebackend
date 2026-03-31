@@ -89,14 +89,21 @@ async function getActiveRound() {
     console.error("[rodoviaService] Erro ao buscar dados auxiliares:", auxErr.message);
   }
 
+  // Log diagnóstico: expõe se o row market_rounds está ausente (causa de currentCount sempre 0)
+  if (!auxData) {
+    console.warn(`[rodoviaService] WARN: market_rounds row ausente para round ${currentRoundId} — currentCount ficará 0`);
+  } else {
+    console.log(`[rodoviaService] DEBUG: market_rounds row encontrado — current_count=${auxData.current_count}`);
+  }
+
   // 4. Calcula status operacional e predictionsOpen
   const operationalStatus = auxData?.operational_status || deriveOperationalStatus(round);
   const predictionsOpen = operationalStatus === "live";
-  
+
   // 5. Monta resposta
   const betsCloseAt = new Date(new Date(round.closes_at).getTime() - (ROUND_DURATION_SEC - BET_WINDOW_SEC) * 1000);
-  const threshold = auxData?.threshold || await getThreshold();
-  
+  const threshold = auxData?.threshold ?? await getThreshold();
+
   return {
     roundId: round.id,
     slug: round.slug,
@@ -105,7 +112,7 @@ async function getActiveRound() {
     startsAt: new Date(new Date(round.closes_at).getTime() - ROUND_DURATION_SEC * 1000).toISOString(),
     betsCloseAt: betsCloseAt.toISOString(),
     endsAt: round.closes_at,
-    currentCount: auxData?.current_count || 0,
+    currentCount: auxData?.current_count ?? 0,
     threshold,
     predictionsOpen,
     selections: round.selections || [],
