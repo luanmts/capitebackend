@@ -273,7 +273,10 @@ class VehicleCounter:
                         # Cores: verde para rastreados, amarelo para quem acabou de cruzar
                         colors = []
                         labels = []
-                        for i, tid in enumerate(detections.tracker_id or []):
+                        # tracker_id é numpy array — não usar como booleano diretamente
+                        raw_ids = detections.tracker_id
+                        tracker_ids = raw_ids.tolist() if raw_ids is not None else []
+                        for i, tid in enumerate(tracker_ids):
                             crossed = int(tid) in self._just_crossed
                             colors.append((0, 255, 255) if crossed else (0, 255, 0))  # BGR
                             conf = float(detections.confidence[i]) if detections.confidence is not None else 0.0
