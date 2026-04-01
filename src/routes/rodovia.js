@@ -131,4 +131,37 @@ router.post("/rounds/:id/finalize", requireWorkerKey, async (req, res) => {
   }
 });
 
+/**
+ * GET /internal/rodovia/debug/frame
+ * Serve o frame anotado mais recente de DEBUG_OUTPUT_DIR.
+ * Protegido por x-worker-key (mesmo secret do worker).
+ * Retorna JPEG diretamente — o frontend faz polling e exibe em <img>.
+ *
+ * Fase 2: trocar este endpoint por um MJPEG stream ou URL de stream anotado
+ * sem mudar a interface do cliente (só a implementação deste handler).
+ */
+router.get("/debug/frame", requireWorkerKey, (req, res) => {
+  const fs   = require("fs");
+  const path = require("path");
+  const dir  = process.env.DEBUG_OUTPUT_DIR || "/tmp/rodovia_debug";
+
+  if (!fs.existsSync(dir)) {
+    return res.status(404).json({ error: "Debug dir não existe. Ative DEBUG_OUTPUT_DIR no worker." });
+  }
+
+  const files = fs.readdirSync(dir)
+    .filter(f => f.endsWith(".jpg"))
+    .map(f => ({ name: f, mtime: fs.statSync(path.join(dir, f)).mtimeMs }))
+    .sort((a, b) => b.mtime - a.mtime);
+
+  if (files.length === 0) {
+    return res.status(404).json({ error: "Nenhum frame disponível ainda." });
+  }
+
+  const latest = path.join(dir, files[0].name);
+  res.setHeader("Content-Type", "image/jpeg");
+  res.setHeader("Cache-Control", "no-store");
+  res.sendFile(latest);
+});
+
 module.exports = router;
