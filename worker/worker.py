@@ -45,6 +45,12 @@ VEHICLE_CLASSES    = os.getenv("VEHICLE_CLASSES", "car,truck,bus,motorcycle")
 LINE_START         = tuple(float(x) for x in os.getenv("LINE_START", "0.0,0.5").split(","))
 LINE_END           = tuple(float(x) for x in os.getenv("LINE_END",   "1.0,0.5").split(","))
 
+# ROI — região de interesse (relativo 0.0–1.0): "x1,y1,x2,y2"
+# Ex: ROI="0.1,0.2,0.9,0.8"  → ignora bordas do frame
+ROI_ENV            = os.getenv("ROI", "")
+# Direção de cruzamento a contar: "in" | "out" | "both"  (padrão: "in")
+COUNT_DIRECTION    = os.getenv("COUNT_DIRECTION", "in")
+
 LOG_LEVEL          = os.getenv("LOG_LEVEL", "INFO")
 
 # Debug visual — salva frames anotados em disco para calibração
@@ -121,6 +127,24 @@ class VehicleCounter:
         self._debug_frame_n = 0   # contador de frames processados para o debug
         # IDs que cruzaram neste frame — destacados em amarelo por 1 frame salvo
         self._just_crossed: set = set()
+
+        # Parse ROI
+        if ROI_ENV:
+            try:
+                parts = [float(x) for x in ROI_ENV.split(",")]
+                assert len(parts) == 4
+                self._roi = tuple(parts)  # (x1, y1, x2, y2) relativo 0–1
+                log.info("ROI ativo: %s (relativo)", self._roi)
+            except Exception:
+                log.warning("ROI inválido: '%s' — ROI desativado", ROI_ENV)
+                self._roi = None
+        else:
+            self._roi = None
+
+        log.info(
+            "Config: COUNT_DIRECTION=%s  ROI=%s  LINE_START=%s  LINE_END=%s",
+            COUNT_DIRECTION, ROI_ENV or "(none)", LINE_START, LINE_END,
+        )
 
         # Mapeia nomes de classe → IDs do modelo
         class_filter = {c.strip() for c in VEHICLE_CLASSES.split(",")}
@@ -236,6 +260,18 @@ class VehicleCounter:
                 )
                 detections = sv.Detections.from_ultralytics(results[0])
 
+                # ── Filtro ROI ──
+                if self._roi is not None and len(detections) > 0:
+                    import numpy as np
+                    x1r, y1r, x2r, y2r = self._roi
+                    cx = (detections.xyxy[:, 0] + detections.xyxy[:, 2]) / 2
+                    cy = (detections.xyxy[:, 1] + detections.xyxy[:, 3]) / 2
+                    mask = (
+                        (cx >= x1r * w) & (cx <= x2r * w) &
+                        (cy >= y1r * h) & (cy <= y2r * h)
+                    )
+                    detections = detections[mask]
+
                 # ── Rastreamento ByteTrack ──
                 detections = tracker.update_with_detections(detections)
 
@@ -247,8 +283,16 @@ class VehicleCounter:
                     continue
 
                 # ── Conta cruzamentos da linha ──
-                crossed_in, _crossed_out = line_zone.trigger(detections=detections)
-                new = int(crossed_in.sum())
+                crossed_in, crossed_out = line_zone.trigger(detections=detections)
+                if COUNT_DIRECTION == "out":
+                    crossed_mask = crossed_out
+                    new = int(crossed_out.sum())
+                elif COUNT_DIRECTION == "both":
+                    crossed_mask = crossed_in | crossed_out  # para highlight debug
+                    new = int(crossed_in.sum()) + int(crossed_out.sum())
+                else:  # "in" (default)
+                    crossed_mask = crossed_in
+                    new = int(crossed_in.sum())
 
                 if new > 0:
                     with self._lock:
@@ -257,10 +301,11 @@ class VehicleCounter:
                     if self._box_ann is not None and detections.tracker_id is not None:
                         self._just_crossed = {
                             int(tid)
-                            for tid, hit in zip(detections.tracker_id, crossed_in)
+                            for tid, hit in zip(detections.tracker_id, crossed_mask)
                             if hit
                         }
-                    log.debug("+%d cruzamento(s) — acumulado=%d", new, self._total_crossings)
+                    log.debug("+%d cruzamento(s) [dir=%s] — acumulado=%d",
+                              new, COUNT_DIRECTION, self._total_crossings)
                 else:
                     self._just_crossed = set()
 
@@ -291,6 +336,15 @@ class VehicleCounter:
 
                         # Linha virtual
                         self._line_ann.annotate(frame=annotated, line_counter=line_zone)
+
+                        # ROI retângulo (laranja) — se configurado
+                        if self._roi is not None:
+                            x1r, y1r, x2r, y2r = self._roi
+                            rx1, ry1 = int(x1r * w), int(y1r * h)
+                            rx2, ry2 = int(x2r * w), int(y2r * h)
+                            cv2.rectangle(annotated, (rx1, ry1), (rx2, ry2), (0, 140, 255), 2)
+                            cv2.putText(annotated, "ROI", (rx1 + 4, ry1 + 18),
+                                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 140, 255), 1, cv2.LINE_AA)
 
                         # Contador total no canto
                         with self._lock:
@@ -414,6 +468,8 @@ def wait_for_round() -> dict:
 def main():
     log.info("Worker Rodovia — API=%s  model=%s  rtsp=%s",
              API_BASE_URL, YOLO_MODEL, RTSP_URL or "(não configurado)")
+    log.info("Config: COUNT_DIRECTION=%s  LINE_START=%s  LINE_END=%s  ROI=%s",
+             COUNT_DIRECTION, LINE_START, LINE_END, ROI_ENV or "(none)")
 
     if not WORKER_KEY:
         log.warning("RODOVIA_WORKER_KEY ausente — requisições não autenticadas")
