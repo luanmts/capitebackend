@@ -158,10 +158,18 @@ router.get("/debug/frame", requireWorkerKey, (req, res) => {
     return res.status(404).json({ error: "Nenhum frame disponível ainda." });
   }
 
-  const latest = path.join(dir, files[0].name);
-  res.setHeader("Content-Type", "image/jpeg");
-  res.setHeader("Cache-Control", "no-store");
-  res.sendFile(latest);
+  // Usa o penúltimo arquivo para evitar corrida com o worker ainda escrevendo o mais recente.
+  // Fallback para o único arquivo disponível se houver só 1.
+  const chosen = path.join(dir, (files[1] ?? files[0]).name);
+
+  try {
+    const buf = fs.readFileSync(chosen);  // lê inteiro para memória — Content-Length bate exatamente
+    res.setHeader("Content-Type", "image/jpeg");
+    res.setHeader("Cache-Control", "no-store");
+    res.send(buf);
+  } catch (err) {
+    return res.status(500).json({ error: "Erro ao ler frame: " + err.message });
+  }
 });
 
 module.exports = router;
